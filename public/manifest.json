@@ -1,0 +1,25 @@
+{
+  "name": "CoachPlan — AI 운동 프로그램 생성",
+  "short_name": "CoachPlan",
+  "description": "트레이너의 스타일로 회원별 운동 프로그램을 빠르게 생성하세요",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFBF9",
+  "theme_color": "#2D6A4F",
+  "orientation": "any",
+  "categories": ["fitness", "health", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
