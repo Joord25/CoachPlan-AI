@@ -25,6 +25,7 @@ interface Props {
   files: File[];
   onBack: () => void;
   onSave: (updated: ProgramStructure) => Promise<void>;
+  memberPanel?: React.ReactNode;
 }
 
 function SortableSectionCard({ id, isEditing, onRemove, children }: { id: string; isEditing: boolean; onRemove: () => void; children: () => React.ReactNode }) {
@@ -71,7 +72,7 @@ function SortableSectionCard({ id, isEditing, onRemove, children }: { id: string
   );
 }
 
-export default function TrainerStyleAnalysis({ result, files, onBack, onSave }: Props) {
+export default function TrainerStyleAnalysis({ result, files, onBack, onSave, memberPanel }: Props) {
   const { user } = useAuth();
   const displayName = user?.displayName?.split(" ")[0] || "트레이너";
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -85,6 +86,7 @@ export default function TrainerStyleAnalysis({ result, files, onBack, onSave }: 
   const [exSearchQuery, setExSearchQuery] = useState("");
   const [exSearchSection, setExSearchSection] = useState<number | null>(null);
   const [userAddedExercises] = useState(() => new Set<string>());
+  const [filePreviewOpen, setFilePreviewOpen] = useState(!memberPanel);
   const fileRefs = useRef<(HTMLDivElement | null)[]>([]);
   const exSearchRef = useRef<HTMLDivElement>(null);
 
@@ -192,15 +194,57 @@ export default function TrainerStyleAnalysis({ result, files, onBack, onSave }: 
   const handleLearn = async () => {
     setSaving(true);
     const { styleId, version, ...structure } = result;
-    await onSave({ ...structure, sections });
+    // 수정된 섹션에서 exerciseDatabase 재구성
+    const updatedExerciseDB = [...new Set(sections.flatMap((s) => s.typicalExercises))];
+    await onSave({ ...structure, sections, exerciseDatabase: updatedExerciseDB });
     setSaving(false);
   };
 
   return (
     <div className="flex-1 flex min-h-screen">
-      {/* ─── 왼쪽: 파일 미리보기 + 근거 표시 ─── */}
-      <div className="w-[45%] border-r border-[var(--gray-200)] bg-[var(--gray-50)] flex flex-col">
-        <div className="flex gap-1 px-4 pt-4 pb-2 overflow-x-auto">
+      {/* ─── 왼쪽: 파일 미리보기 + 근거 표시 (접기 가능) ─── */}
+      <div className={`border-r border-[var(--gray-200)] bg-[var(--gray-50)] flex flex-col transition-all duration-300 ${
+        filePreviewOpen ? (memberPanel ? "w-[25%]" : "w-[45%]") : "w-12"
+      }`}>
+        {/* 접기/펼치기 토글 */}
+        <div className={`flex items-center ${filePreviewOpen ? "justify-between px-4" : "justify-center"} pt-3 pb-2`}>
+          {filePreviewOpen && (
+            <span className="text-[10px] font-bold text-[var(--gray-400)] uppercase tracking-[0.1em]">파일</span>
+          )}
+          <button
+            onClick={() => setFilePreviewOpen(!filePreviewOpen)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--gray-400)] hover:text-[var(--gray-600)] hover:bg-[var(--gray-100)] transition-colors"
+            title={filePreviewOpen ? "파일 미리보기 접기" : "파일 미리보기 열기"}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              {filePreviewOpen ? <path d="M9 3L5 7l4 4" /> : <path d="M5 3l4 4-4 4" />}
+            </svg>
+          </button>
+        </div>
+
+        {/* 접힌 상태: 파일 아이콘 세로 목록 */}
+        {!filePreviewOpen && (
+          <div className="flex flex-col items-center gap-2 mt-2">
+            {files.map((file, i) => (
+              <button
+                key={i}
+                onClick={() => { setActiveFileIndex(i); setFilePreviewOpen(true); }}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  activeFileIndex === i
+                    ? "bg-[var(--primary)] text-white"
+                    : "bg-white text-[var(--gray-500)] hover:bg-[var(--gray-100)]"
+                }`}
+                title={file.name}
+              >
+                <span className="text-[10px] font-bold">{i + 1}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 펼친 상태: 파일 탭 + 미리보기 */}
+        {filePreviewOpen && (<>
+        <div className="flex gap-1 px-4 pb-2 overflow-x-auto">
           {files.map((file, i) => (
             <button
               key={i}
@@ -272,10 +316,11 @@ export default function TrainerStyleAnalysis({ result, files, onBack, onSave }: 
             </div>
           ))}
         </div>
+        </>)}
       </div>
 
-      {/* ─── 오른쪽: 하나의 흐름 ─── */}
-      <div className="w-[55%] flex flex-col h-screen">
+      {/* ─── 중앙: 분석 결과 ─── */}
+      <div className={`flex flex-col h-screen ${memberPanel ? "flex-1 min-w-0" : "w-[55%]"}`}>
         <div className="flex-1 overflow-auto px-6 py-6">
           <div className="max-w-2xl mx-auto space-y-6">
 
@@ -693,19 +738,28 @@ export default function TrainerStyleAnalysis({ result, files, onBack, onSave }: 
           </div>
         </div>
 
-        {/* ─── 하단 고정: 학습 버튼 ─── */}
-        <div className="px-6 py-4 border-t border-[var(--gray-100)] bg-[var(--background)]">
-          <div className="max-w-2xl mx-auto">
-            <button
-              onClick={handleLearn}
-              disabled={saving}
-              className="w-full bg-[var(--primary)] text-white rounded-2xl py-4 text-sm font-semibold hover:bg-[var(--primary-dark)] transition-colors disabled:opacity-50"
-            >
-              {saving ? "저장 중..." : "이 스타일 학습시키기"}
-            </button>
+        {/* ─── 하단 고정: 학습 버튼 (memberPanel 있으면 숨김) ─── */}
+        {!memberPanel && (
+          <div className="px-6 py-4 border-t border-[var(--gray-100)] bg-[var(--background)]">
+            <div className="max-w-2xl mx-auto">
+              <button
+                onClick={handleLearn}
+                disabled={saving}
+                className="w-full bg-[var(--primary)] text-white rounded-2xl py-4 text-sm font-semibold hover:bg-[var(--primary-dark)] transition-colors disabled:opacity-50"
+              >
+                {saving ? "저장 중..." : "이 스타일 학습시키기"}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      {/* ─── 오른쪽: 회원 입력 패널 ─── */}
+      {memberPanel && (
+        <div className="flex-1 min-w-0 border-l border-[var(--gray-200)] flex flex-col h-screen overflow-auto">
+          {memberPanel}
+        </div>
+      )}
     </div>
   );
 }

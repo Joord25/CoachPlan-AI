@@ -8,6 +8,8 @@ import type { ProgramStructure } from "@/lib/analyzeProgram";
 import TrainerStyleAnalysis from "@/components/TrainerStyleAnalysis";
 import AnalysisLoadingOverlay from "@/components/AnalysisLoadingOverlay";
 import type { AnalysisStep } from "@/components/AnalysisLoadingOverlay";
+import MemberConditionCheck from "@/components/MemberConditionCheck";
+import type { MemberInput } from "@/components/MemberConditionCheck";
 
 type AnalysisResult = ProgramStructure & { styleId: string; version: number };
 
@@ -40,6 +42,8 @@ export default function Home() {
   const previewUrl = useMemo(() => previewFile ? URL.createObjectURL(previewFile) : null, [previewFile]);
   const [textInput, setTextInput] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [view, setView] = useState<"upload" | "analysis" | "member_input">("upload");
+  const [memberInput, setMemberInput] = useState<MemberInput | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -73,9 +77,9 @@ export default function Home() {
       setAnalysisStep(3);
       await new Promise((r) => setTimeout(r, 300));
       setAnalysisStep(4);
-      const styleId = await saveProgramStyle(user.uid, structure);
 
-      setResult({ ...structure, styleId, version: 1 });
+      // 분석 결과는 state에만 보관 — Firestore 저장은 "학습시키기"에서
+      setResult({ ...structure, styleId: "", version: 0 });
     } catch (e) {
       setError(toUserFriendlyError(e));
     } finally {
@@ -97,9 +101,8 @@ export default function Home() {
       setAnalysisStep(3);
       await new Promise((r) => setTimeout(r, 300));
       setAnalysisStep(4);
-      const styleId = await saveProgramStyle(user.uid, structure);
 
-      setResult({ ...structure, styleId, version: 1 });
+      setResult({ ...structure, styleId: "", version: 0 });
     } catch (e) {
       setError(toUserFriendlyError(e));
     } finally {
@@ -109,8 +112,15 @@ export default function Home() {
 
   const handleSave = async (structure: ProgramStructure) => {
     if (!user || !result) return;
-    const newVersion = await updateProgramStyle(user.uid, result.styleId, structure);
-    setResult((prev) => (prev ? { ...prev, ...structure, version: newVersion } : prev));
+    if (result.styleId) {
+      const newVersion = await updateProgramStyle(user.uid, result.styleId, structure);
+      setResult((prev) => (prev ? { ...prev, ...structure, version: newVersion } : prev));
+    } else {
+      const styleId = await saveProgramStyle(user.uid, structure);
+      setResult((prev) => (prev ? { ...prev, ...structure, styleId, version: 1 } : prev));
+    }
+    // 저장 완료 → 회원 정보 입력으로 이동
+    setView("member_input");
   };
 
   const resetToUpload = () => {
@@ -133,7 +143,7 @@ export default function Home() {
     );
   }
 
-  // ─── 분석 결과 화면 ───
+  // ─── 분석 결과 화면 (+ 회원 입력 패널) ───
   if (result) {
     return (
       <TrainerStyleAnalysis
@@ -141,6 +151,17 @@ export default function Home() {
         files={uploadedFiles}
         onBack={resetToUpload}
         onSave={handleSave}
+        memberPanel={view === "member_input" ? (
+          <MemberConditionCheck
+            compact
+            onComplete={(input) => {
+              setMemberInput(input);
+              // TODO: 2단계 — AI 프로그램 생성으로 이동
+            }}
+            onBack={() => setView("analysis")}
+            trainerName={user?.displayName?.split(" ")[0]}
+          />
+        ) : undefined}
       />
     );
   }
@@ -298,20 +319,6 @@ export default function Home() {
           </div>
         )}
 
-        {!showTextInput && (
-          <div className="bg-white border border-[var(--gray-200)] rounded-2xl px-5 py-4 flex items-center gap-3">
-            <input
-              type="text"
-              placeholder="무엇이든 물어보세요..."
-              className="flex-1 outline-none text-sm text-[var(--gray-700)] placeholder:text-[var(--gray-400)] bg-transparent"
-            />
-            <button className="w-9 h-9 rounded-full bg-[var(--gray-200)] flex items-center justify-center hover:bg-[var(--primary)] hover:text-white transition-colors text-[var(--gray-400)]">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M9 14V4M9 4l-3.5 3.5M9 4l3.5 3.5" />
-              </svg>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* 파일 미리보기 모달 */}
